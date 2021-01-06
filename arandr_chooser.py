@@ -16,6 +16,10 @@ gi.require_version('PangoCairo', '1.0')
 from gi.repository import GObject, Gtk, Pango, PangoCairo, Gdk, GLib
 
 
+# Taken from the original arandr source code and modified (see https://christian.amsuess.com/tools/arandr/)
+# Original copyright:
+# Copyright © chrysn <chrysn@fsfe.org> 2008–2019, Себастьян Gli ţa Κατινα 2011,
+# Johannes Holmberg <johannes@update.uu.se> 2015, actionless 2019 published under GPLv3 or any later version.
 class MyARandRWidget(Gtk.DrawingArea):
     __gsignals__ = {
         # 'expose-event':'override', # FIXME: still needed?
