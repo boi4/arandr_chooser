@@ -191,12 +191,12 @@ class MyEntry(Gtk.Entry):
     def text_changed(self, self2):
         print(self.get_text())
         b = [vbox for vbox in self.vbox_list
-             if self.get_text().lower() in vbox.get_children()[0].fname.lower()]
+             if self.get_text().lower() in vbox.get_children()[0].fname.lower().split('/')[-1]]
         if self.current_list != b:
             self.apply_list(b)
 
     def apply_list(self, new_list):
-        for vbox in self.current_list:
+        for vbox in list(self.current_list):
             if vbox not in new_list:
                 self.display_list_box.remove(vbox)
                 self.current_list.remove(vbox)
