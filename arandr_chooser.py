@@ -7,6 +7,7 @@ import subprocess
 
 config_path = "~/.screenlayout"
 scripts = [os.path.expanduser(config_path) + "/" + s for s in os.listdir(os.path.expanduser(config_path)) if s.endswith(".sh")]
+colors = [(0.25,0.25,0.25),(0.5,0.5,0.5),(1,1,1)]
 
 
 import gi
@@ -21,11 +22,12 @@ class MyARandRWidget(Gtk.DrawingArea):
         'changed': (GObject.SignalFlags.RUN_LAST, GObject.TYPE_NONE, ()),
     }
 
-    def __init__(self, window, factor=8, display=None, force_version=False):
+    def __init__(self, window, fname, factor=8, display=None, force_version=False):
         super(MyARandRWidget, self).__init__()
 
         self.window = window
         self._factor = factor
+        self.fname = fname
 
         factor = 10
 
@@ -35,6 +37,7 @@ class MyARandRWidget(Gtk.DrawingArea):
         )  # best guess for now
 
         self._xrandr = screenlayout.xrandr.XRandR(display=display, force_version=force_version)
+        self._load_from_file(fname)
         self.connect('draw', self.do_expose_event)
 
     # #################### widget features ####################
@@ -65,7 +68,7 @@ class MyARandRWidget(Gtk.DrawingArea):
             self._force_repaint()
         self.emit('changed')
 
-    def load_from_file(self, file):
+    def _load_from_file(self, file):
         data = open(file).read()
         template = self._xrandr.load_from_string(data)
         self._xrandr_was_reloaded()
@@ -98,11 +101,11 @@ class MyARandRWidget(Gtk.DrawingArea):
         cfg = xrandr.configuration
         state = xrandr.state
 
-        context.set_source_rgb(0.25, 0.25, 0.25)
+        context.set_source_rgb(*colors[0])
         context.rectangle(0, 0, *state.virtual.max)
         context.fill()
 
-        context.set_source_rgb(0.5, 0.5, 0.5)
+        context.set_source_rgb(*colors[1])
         context.rectangle(0, 0, *cfg.virtual)
         context.fill()
 
@@ -116,7 +119,7 @@ class MyARandRWidget(Gtk.DrawingArea):
             center = rect[0] + rect[2] / 2, rect[1] + rect[3] / 2
 
             # paint rectangle
-            context.set_source_rgba(1, 1, 1, 0.7)
+            context.set_source_rgba(*colors[2], 0.7)
             context.rectangle(*rect)
             context.fill()
             context.set_source_rgb(0, 0, 0)
@@ -165,21 +168,63 @@ class MyARandRWidget(Gtk.DrawingArea):
         # region output_name drag and drop
 
 
-def use_script(script, args):
+class MyEntry(Gtk.Entry):
+
+    def __init__(self, vbox_list, display_list_box, window):
+        super(MyEntry, self).__init__()
+
+        self.vbox_list = vbox_list
+        self.display_list_box = display_list_box
+        self.window = window
+        self.current_list = []
+
+        self.connect('changed', self.text_changed)
+        self.connect('activate', self.text_activated)
+        self.connect('key-release-event', self.key_release)
+
+        self.emit('changed')
+
+    def text_changed(self, self2):
+        print(self.get_text())
+        b = [vbox for vbox in self.vbox_list
+             if self.get_text().lower() in vbox.get_children()[0].fname.lower()]
+        if self.current_list != b:
+            self.apply_list(b)
+
+    def apply_list(self, new_list):
+        for vbox in self.current_list:
+            if vbox not in new_list:
+                self.display_list_box.remove(vbox)
+                self.current_list.remove(vbox)
+        for vbox in new_list:
+            if vbox not in self.current_list:
+                self.display_list_box.pack_start(vbox, expand=False, fill=False, padding=0)
+                self.current_list.append(vbox)
+
+    def text_activated(self, self2):
+        if len(self.current_list):
+            use_script(self.current_list[0].get_children()[0].fname)
+        self.window.destroy()
+
+    def key_release(self, self2, ev):
+        if ev.keyval == Gdk.KEY_Escape:
+            self.window.destroy()
+
+
+def use_script(script, *args):
     print("Applying", script)
     subprocess.run(script)
 
 def create_lambda(script):
     return lambda *args: use_script(script, args)
 
-win = Gtk.Window()
-hbox = Gtk.HBox(spacing=10)
-win.add(hbox)
 
+win = Gtk.Window(title="ARandR chooser")
+
+vboxes = []
 for script in scripts:
-    arandr = MyARandRWidget(window=win)
     try:
-        arandr.load_from_file(script)
+        arandr = MyARandRWidget(window=win, fname=script)
     except screenlayout.auxiliary.FileLoadError:
         print("Warning: Problem loading script", script)
         continue
@@ -192,7 +237,16 @@ for script in scripts:
 
     vbox.pack_start(button, expand=False, fill=False, padding=0)
 
-    hbox.pack_start(vbox, expand=True, fill=True, padding=0)
+    vboxes.append(vbox)
+
+main_box = Gtk.VBox()
+
+display_list_box = Gtk.HBox(spacing=10)
+text_input = MyEntry(vboxes, display_list_box, win)
+
+main_box.pack_start(text_input, expand=True, fill=True, padding=0)
+main_box.pack_start(display_list_box, expand=True, fill=True, padding=0)
+win.add(main_box)
 
 win.connect("destroy", Gtk.main_quit)
 win.show_all()
